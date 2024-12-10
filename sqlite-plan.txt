@@ -1,0 +1,45 @@
+settings
+    coredir
+    corename
+    coreslug
+    builddate
+    description
+
+game
+    gameid
+    name (INDEX)
+    slug (INDEX)
+    source
+    description
+    rating
+    releasedate
+    developer
+    publisher
+    # genre
+    players
+    genreid (INDEX) (genre.id)
+    # path (filename.filename)
+    # image (screenshot.screenshot)
+    # thumbnail (screenshottitle.screenshottitle)
+
+rom
+    filename
+    rdbname
+    crc32
+    gameid (game.id)
+
+screenshot
+    gameid (game.gameid)
+    screenshot
+
+screenshottitle
+    gameid (game.gameid)
+    screenshottitle
+
+genre
+    genreid
+    genrename
+
+
+
+
