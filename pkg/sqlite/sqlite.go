@@ -1,7 +1,9 @@
 package sqlite
 
 import (
+	"crypto/md5"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -24,6 +26,7 @@ func allocDB(path string) (*sql.DB, error) {
 		GamesFolder text not null,
 		SupportedSystemIds text not null,
 		BuildDate text not null,
+		MGDBVersion text not null,
 		Description text not null
 	);`
 	_, err = db.Exec(sqlStmt)
@@ -43,7 +46,9 @@ func allocDB(path string) (*sql.DB, error) {
 		ReleaseDate text not null,
 		Developer text not null,
 		Publisher text not null,
-		Players text not null
+		Players text not null,
+		ScreenshotHash text,
+		TitleScreenHash text
 	 ) WITHOUT ROWID;
 	 CREATE INDEX game_name_idx ON Game (Name);
 	 CREATE INDEX game_genre_idx ON Game (GenreID);`
@@ -52,31 +57,15 @@ func allocDB(path string) (*sql.DB, error) {
 		return db, err
 	}
 
-	// I don't think we'll really need this, plus zip, chd issues per ext
-	/*
-		sqlStmt = `
-		drop table if exists RDBRom;
-		create table RDBRom (
-			ROMName text primary key not null,
-			Name text not null,
-			CRC32 integer not null,
-			Size integer not null,
-			Serial text not null,
-			GameID integer not null
-		);`
-		_, err = db.Exec(sqlStmt)
-		if err != nil {
-			return db, err
-		}
-	*/
-
 	// FileName without ext should be good match
 	// Slugs can go here too!
 	sqlStmt = `
 	drop table if exists GamelistRom;
 	create table GamelistRom (
 		FileName text primary key not null,
-		GameID integer not null
+		GameID integer not null,
+		SupportedSystemIds text not null,
+		CRC32 integer not null
 	);`
 	_, err = db.Exec(sqlStmt)
 	if err != nil {
@@ -89,7 +78,8 @@ func allocDB(path string) (*sql.DB, error) {
 		Path text primary key not null,
 		FileName text not null,
 		FileExt text not null,
-		GameID integer not null
+		GameID integer not null,
+		SupportedSystemIds text not null
 	);`
 	_, err = db.Exec(sqlStmt)
 	if err != nil {
@@ -108,23 +98,10 @@ func allocDB(path string) (*sql.DB, error) {
 	}
 
 	sqlStmt = `
-	drop table if exists Screenshot;
-	create table Screenshot (
-		GameID integer primary key not null,
-		FilePath text not null,
-		Bytes blob
-	);`
-	_, err = db.Exec(sqlStmt)
-	if err != nil {
-		return db, err
-	}
-
-	sqlStmt = `
-	drop table if exists TitleScreen;
-	create table TitleScreen (
-		GameID integer primary key not null,
-		FilePath text not null,
-		Bytes blob
+	drop table if exists ImageBlob;
+	create table ImageBlob (
+		Hash text primary key not null,
+		Bytes blob not null
 	);`
 	_, err = db.Exec(sqlStmt)
 	if err != nil {
@@ -137,12 +114,16 @@ func allocDB(path string) (*sql.DB, error) {
 	return db, nil
 }
 
+func GetMD5Hash(bytes []byte) string {
+	hash := md5.Sum(bytes)
+	return hex.EncodeToString(hash[:])
+}
+
 func CreateMGDB(path string) (*sql.DB, error) {
 	db, err := allocDB(path)
 	if err != nil {
 		return nil, err
 	}
-
 	//db.Exec("VACUUM")
 	return db, nil
 }
@@ -150,8 +131,8 @@ func CreateMGDB(path string) (*sql.DB, error) {
 func InsertMGDBInfo(db *sql.DB, info mgdb.MGDBInfo) {
 	stmt, err := db.Prepare(
 		"insert into MGDBInfo(" +
-			"CollectionName, GamesFolder, SupportedSystemIds, BuildDate, Description" +
-			") values (?, ?, ?, ?, ?)",
+			"CollectionName, GamesFolder, SupportedSystemIds, BuildDate, MGDBVersion, Description" +
+			") values (?, ?, ?, ?, ?, ?)",
 	)
 	if err != nil {
 		panic("InsertMGDBInfo Prepare")
@@ -161,6 +142,7 @@ func InsertMGDBInfo(db *sql.DB, info mgdb.MGDBInfo) {
 		info.GamesFolder,
 		info.SupportedSystemIds,
 		info.BuildDate,
+		info.MGDBVersion,
 		info.Description,
 	)
 	if err != nil {
@@ -229,8 +211,8 @@ func BulkInsertGamelistRoms(db *sql.DB, gamelistRoms map[string]mgdb.GamelistRom
 		fmt.Println("adding rom", rom.FileName)
 		stmt, err := db.Prepare(
 			"insert into GamelistRom(" +
-				"FileName, GameID" +
-				") values (?, ?)",
+				"FileName, GameID, SupportedSystemIds, CRC32" +
+				") values (?, ?, ?, ?)",
 		)
 		if err != nil {
 			fmt.Printf("%+v\n", rom)
@@ -239,6 +221,8 @@ func BulkInsertGamelistRoms(db *sql.DB, gamelistRoms map[string]mgdb.GamelistRom
 		_, err = stmt.Exec(
 			rom.FileName,
 			rom.GameID,
+			rom.SupportedSystemIds,
+			rom.CRC32,
 		)
 		if err != nil {
 			fmt.Printf("%+v\n", rom)
@@ -262,62 +246,62 @@ func safeLoadFileBytes(path string) []byte {
 	return imageBytes
 }
 
-func BulkInsertScreenshots(db *sql.DB, screenshots map[int]mgdb.Screenshot, basePath string) {
-	for _, screen := range screenshots {
-		fmt.Println("adding screenshot", screen.FilePath)
-		screenPath := filepath.Join(basePath, screen.FilePath)
-		blob := safeLoadFileBytes(screenPath)
-		if blob != nil {
-			screen.FilePath = ""
+func BulkInsertImageMap(db *sql.DB, imgType string, imageMap map[int]string, md5Map map[string]bool, basePath string) {
+	for gameID, filePath := range imageMap {
+		if gameID == 0 || filePath == "" {
+			continue
+		}
+		fmt.Printf("adding image %v %v", imgType, filePath)
+		imgPath := filepath.Join(basePath, filePath)
+		blob := safeLoadFileBytes(imgPath)
+		if blob == nil {
+			continue
+		}
+
+		// Compare hash for dedupe
+		hash := GetMD5Hash(blob)
+		if _, ok := md5Map[hash]; !ok {
+			// ADD IMAGE RECORD
+			stmt, err := db.Prepare(
+				"insert into ImageBlob(Hash, Bytes) values (?, ?)",
+			)
+			if err != nil {
+				fmt.Printf("%v %v", hash, filePath)
+				panic("BulkInsertImageMap ImageBlob Prepare")
+			}
+			_, err = stmt.Exec(
+				hash,
+				blob,
+			)
+			if err != nil {
+				fmt.Printf("%+v\n", filePath)
+				panic("BulkInsertImageMap ImageBlob Exec")
+			}
+
+			md5Map[hash] = true
+		}
+
+		// Update game with hash by type
+
+		column := "ScreenshotHash"
+		if imgType == "TitleScreen" {
+			column = "TitleScreenHash"
 		}
 
 		stmt, err := db.Prepare(
-			"insert into Screenshot(" +
-				"FilePath, GameID, Bytes" +
-				") values (?, ?, ?)",
+			"update Game set " + column + " = ? where GameID = ?",
 		)
 		if err != nil {
-			fmt.Printf("%+v\n", screen)
-			panic("BulkInsertScreenshots Prepare")
+			fmt.Printf("%v %v", gameID, hash)
+			panic("BulkInsertImageMap Game Update Prepare")
 		}
 		_, err = stmt.Exec(
-			screen.FilePath,
-			screen.GameID,
-			blob,
+			hash,
+			gameID,
 		)
 		if err != nil {
-			fmt.Printf("%+v\n", screen)
-			panic("BulkInsertScreenshots Exec")
-		}
-	}
-}
-
-func BulkInsertTitleScreens(db *sql.DB, titleScreens map[int]mgdb.TitleScreen, basePath string) {
-	for _, screen := range titleScreens {
-		fmt.Println("adding titlescreen", screen.FilePath)
-		screenPath := filepath.Join(basePath, screen.FilePath)
-		blob := safeLoadFileBytes(screenPath)
-		if blob != nil {
-			screen.FilePath = ""
-		}
-
-		stmt, err := db.Prepare(
-			"insert into TitleScreen(" +
-				"FilePath, GameID, Bytes" +
-				") values (?, ?, ?)",
-		)
-		if err != nil {
-			fmt.Printf("%+v\n", screen)
-			panic("BulkInsertTitleScreens Prepare")
-		}
-		_, err = stmt.Exec(
-			screen.FilePath,
-			screen.GameID,
-			blob,
-		)
-		if err != nil {
-			fmt.Printf("%+v\n", screen)
-			panic("BulkInsertTitleScreens Exec")
+			fmt.Printf("%v %v", gameID, hash)
+			panic("BulkInsertScreenshots Game Update Exec")
 		}
 	}
 }

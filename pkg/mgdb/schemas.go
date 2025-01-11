@@ -5,20 +5,23 @@ type MGDBInfo struct {
 	GamesFolder        string
 	SupportedSystemIds string
 	BuildDate          string
+	MGDBVersion        string
 	Description        string
 }
 
 type Game struct {
-	GameID      int
-	Name        string
-	IsIndexed   int
-	GenreId     int
-	Rating      string
-	ReleaseDate string
-	Developer   string
-	Publisher   string
-	Players     string
-	Description string
+	GameID          int
+	Name            string
+	IsIndexed       int
+	GenreId         int
+	Rating          string
+	ReleaseDate     string
+	Developer       string
+	Publisher       string
+	Players         string
+	Description     string
+	ScreenshotHash  string
+	TitleScreenHash string
 }
 
 type RDBRom struct {
@@ -31,15 +34,18 @@ type RDBRom struct {
 }
 
 type GamelistRom struct {
-	FileName string
-	GameID   int
+	FileName           string
+	GameID             int
+	SupportedSystemIds string
+	CRC32              int
 }
 
 type IndexedRom struct {
-	Path     string
-	FileName string
-	FileExt  string
-	GameID   int
+	Path               string
+	FileName           string
+	FileExt            string
+	GameID             int
+	SupportedSystemIds string
 }
 
 type Genre struct {
@@ -47,14 +53,7 @@ type Genre struct {
 	Name    string
 }
 
-type Screenshot struct {
-	GameID   int
-	FilePath string
-	Bytes    []byte
-}
-
-type TitleScreen struct {
-	GameID   int
-	FilePath string
-	Bytes    []byte
+type ImageBlob struct {
+	Hash  string
+	Bytes []byte
 }
