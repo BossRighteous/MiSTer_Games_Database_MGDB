@@ -44,14 +44,17 @@ func allocDB(path string) (*sql.DB, error) {
 		Description text not null,
 		Rating text not null,
 		ReleaseDate text not null,
-		Developer text not null,
-		Publisher text not null,
+		DeveloperID integer not null,
+		PublisherID integer not null,
 		Players text not null,
+		ExternalID text not null,
 		ScreenshotHash text,
 		TitleScreenHash text
-	 ) WITHOUT ROWID;
+	 );
 	 CREATE INDEX game_name_idx ON Game (Name);
-	 CREATE INDEX game_genre_idx ON Game (GenreID);`
+	 CREATE INDEX game_genre_idx ON Game (GenreID);
+	 CREATE INDEX game_developer_idx ON Game (DeveloperID);
+	 CREATE INDEX game_publisher_idx ON Game (PublisherID);`
 	_, err = db.Exec(sqlStmt)
 	if err != nil {
 		return db, err
@@ -101,7 +104,32 @@ func allocDB(path string) (*sql.DB, error) {
 	create table Genre (
 		GenreID integer primary key not null,
 		Name text not null
-	);`
+	);
+	CREATE INDEX genre_name_idx ON Genre (Name);`
+	_, err = db.Exec(sqlStmt)
+	if err != nil {
+		return db, err
+	}
+
+	sqlStmt = `
+	drop table if exists Developer;
+	create table Developer (
+		DeveloperID integer primary key not null,
+		Name text not null
+	);
+	CREATE INDEX developer_name_idx ON Developer (Name);`
+	_, err = db.Exec(sqlStmt)
+	if err != nil {
+		return db, err
+	}
+
+	sqlStmt = `
+	drop table if exists Publisher;
+	create table Publisher (
+		PublisherID integer primary key not null,
+		Name text not null
+	);
+	CREATE INDEX publisher_name_idx ON Publisher (Name);`
 	_, err = db.Exec(sqlStmt)
 	if err != nil {
 		return db, err
@@ -120,7 +148,7 @@ func allocDB(path string) (*sql.DB, error) {
 
 	db.Exec("pragma synchronous = off")
 	db.Exec("pragma journal_mode = off")
-	//db.Exec("pragma pagesize = 1024")
+	db.Exec("pragma page_size = 4096")
 	return db, nil
 }
 
@@ -174,9 +202,9 @@ func BulkInsertGames(db *sql.DB, games []mgdb.Game) {
 		fmt.Println("adding game", game.Name)
 		stmt, err := db.Prepare(
 			"insert into Game(" +
-				"GameID, Name, IsIndexed, GenreId, Rating, ReleaseDate, " +
-				"Developer, Publisher, Players, Description" +
-				") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+				"GameID, Name, IsIndexed, GenreID, Rating, ReleaseDate, " +
+				"DeveloperID, PublisherID, Players, Description, ExternalID" +
+				") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		)
 		if err != nil {
 			fmt.Printf("%+v\n", game)
@@ -186,13 +214,14 @@ func BulkInsertGames(db *sql.DB, games []mgdb.Game) {
 			game.GameID,
 			game.Name,
 			game.IsIndexed,
-			game.GenreId,
+			game.GenreID,
 			game.Rating,
 			game.ReleaseDate,
-			game.Developer,
-			game.Publisher,
+			game.DeveloperID,
+			game.PublisherID,
 			game.Players,
 			game.Description,
+			game.ExternalID,
 		)
 		if err != nil {
 			fmt.Printf("%+v\n", game)
@@ -221,6 +250,52 @@ func BulkInsertGenres(db *sql.DB, genres []mgdb.Genre) {
 		if err != nil {
 			fmt.Printf("%+v\n", genre)
 			panic("BulkInsertGenres Exec")
+		}
+	}
+}
+
+func BulkInsertDevelopers(db *sql.DB, developers []mgdb.Developer) {
+	for _, developer := range developers {
+		fmt.Println("adding Developer", developer.Name)
+		stmt, err := db.Prepare(
+			"insert into Developer(" +
+				"DeveloperID, Name" +
+				") values (?, ?)",
+		)
+		if err != nil {
+			fmt.Printf("%+v\n", developer)
+			panic("BulkInsertDevelopers Prepare")
+		}
+		_, err = stmt.Exec(
+			developer.DeveloperID,
+			developer.Name,
+		)
+		if err != nil {
+			fmt.Printf("%+v\n", developer)
+			panic("BulkInsertDevelopers Exec")
+		}
+	}
+}
+
+func BulkInsertPublishers(db *sql.DB, publishers []mgdb.Publisher) {
+	for _, publisher := range publishers {
+		fmt.Println("adding Publisher", publisher.Name)
+		stmt, err := db.Prepare(
+			"insert into Publisher(" +
+				"PublisherID, Name" +
+				") values (?, ?)",
+		)
+		if err != nil {
+			fmt.Printf("%+v\n", publisher)
+			panic("BulkInsertPublishers Prepare")
+		}
+		_, err = stmt.Exec(
+			publisher.PublisherID,
+			publisher.Name,
+		)
+		if err != nil {
+			fmt.Printf("%+v\n", publisher)
+			panic("BulkInsertPublishers Exec")
 		}
 	}
 }

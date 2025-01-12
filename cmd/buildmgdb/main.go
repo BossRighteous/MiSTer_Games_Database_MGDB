@@ -95,11 +95,24 @@ func buildMGDB(dataConfig config.DataConfig) {
 	gameMap[0] = 0
 	slugRomMap := make(map[string]mgdb.SlugRom)
 	slugRomMap[""] = mgdb.SlugRom{}
+
 	reindexedGenres := []mgdb.Genre{
 		{GenreID: 0, Name: "~Unknown"},
 	}
 	genreMap := make(map[string]int) // genre [string]genreId/Index
 	genreMap[""] = 0
+
+	reindexedDevelopers := []mgdb.Developer{
+		{DeveloperID: 0, Name: "~Unknown"},
+	}
+	developerMap := make(map[string]int) // genre [string]developerId/Index
+	developerMap[""] = 0
+
+	reindexedPublishers := []mgdb.Publisher{
+		{PublisherID: 0, Name: "~Unknown"},
+	}
+	publisherMap := make(map[string]int) // genre [string]publisherId/Index
+	publisherMap[""] = 0
 
 	// Mapping for binary blobs
 	screenshotMap := make(map[int]string) // [gameId]imagePath
@@ -132,6 +145,30 @@ func buildMGDB(dataConfig config.DataConfig) {
 			genreID = foundGenreID
 		}
 
+		developerID := 0
+		if foundDeveloperID, ok := developerMap[game.Developer]; !ok {
+			developerID = len(reindexedDevelopers)
+			reindexedDevelopers = append(reindexedDevelopers, mgdb.Developer{
+				DeveloperID: developerID,
+				Name:        game.Developer,
+			})
+			developerMap[game.Developer] = developerID
+		} else {
+			developerID = foundDeveloperID
+		}
+
+		publisherID := 0
+		if foundPublisherID, ok := publisherMap[game.Publisher]; !ok {
+			publisherID = len(reindexedPublishers)
+			reindexedPublishers = append(reindexedPublishers, mgdb.Publisher{
+				PublisherID: publisherID,
+				Name:        game.Publisher,
+			})
+			publisherMap[game.Publisher] = publisherID
+		} else {
+			publisherID = foundPublisherID
+		}
+
 		gameID := 0
 		if foundGameID, ok := gameMap[glGameID]; !ok {
 			gameID = len(reindexedGames)
@@ -149,13 +186,14 @@ func buildMGDB(dataConfig config.DataConfig) {
 				GameID:      gameID,
 				Name:        game.Name,
 				IsIndexed:   0,
-				GenreId:     genreID,
+				GenreID:     genreID,
 				Description: fmtDescription,
 				Rating:      game.Rating,
 				ReleaseDate: fmtReleaseDate,
-				Developer:   game.Developer,
-				Publisher:   game.Publisher,
+				DeveloperID: developerID,
+				PublisherID: publisherID,
 				Players:     game.Players,
+				ExternalID:  game.ID,
 			})
 			gameMap[glGameID] = gameID
 		} else {
@@ -212,8 +250,10 @@ func buildMGDB(dataConfig config.DataConfig) {
 
 	sqlite.InsertMGDBInfo(db, dbInfo)
 	sqlite.BulkInsertGames(db, reindexedGames)
-	sqlite.BulkInsertGenres(db, reindexedGenres)
 	sqlite.BulkInsertSlugRoms(db, slugRomMap)
+	sqlite.BulkInsertGenres(db, reindexedGenres)
+	sqlite.BulkInsertDevelopers(db, reindexedDevelopers)
+	sqlite.BulkInsertPublishers(db, reindexedPublishers)
 	sqlite.BulkInsertRomCrcs(db, romCrs)
 	sqlite.BulkInsertImageMap(db, "Screenshot", screenshotMap, blobHashMap, corePath)
 	sqlite.BulkInsertImageMap(db, "TitleScreen", titleScreenMap, blobHashMap, corePath)

@@ -13,13 +13,14 @@ type Game struct {
 	GameID          int
 	Name            string
 	IsIndexed       int
-	GenreId         int
+	GenreID         int
 	Rating          string
 	ReleaseDate     string
-	Developer       string
-	Publisher       string
+	DeveloperID     int
+	PublisherID     int
 	Players         string
 	Description     string
+	ExternalID      string
 	ScreenshotHash  string
 	TitleScreenHash string
 }
@@ -46,6 +47,16 @@ type IndexedRom struct {
 type Genre struct {
 	GenreID int
 	Name    string
+}
+
+type Developer struct {
+	DeveloperID int
+	Name        string
+}
+
+type Publisher struct {
+	PublisherID int
+	Name        string
 }
 
 type ImageBlob struct {
