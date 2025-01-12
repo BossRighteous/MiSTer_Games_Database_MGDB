@@ -24,20 +24,15 @@ type Game struct {
 	TitleScreenHash string
 }
 
-type RDBRom struct {
-	ROMName string
-	Name    string
-	CRC32   int
-	Size    int
-	Serial  string
-	GameID  int
-}
-
-type GamelistRom struct {
-	FileName           string
+type SlugRom struct {
+	Slug               string
 	GameID             int
 	SupportedSystemIds string
-	CRC32              int
+}
+
+type RomCrc struct {
+	CRC32 string
+	Slug  string
 }
 
 type IndexedRom struct {

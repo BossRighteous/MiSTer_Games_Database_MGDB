@@ -15,6 +15,7 @@ import (
 	"github.com/BossRighteous/MiSTer_Games_Data_Utils/pkg/mgdb"
 	"github.com/BossRighteous/MiSTer_Games_Data_Utils/pkg/rdb"
 	"github.com/BossRighteous/MiSTer_Games_Data_Utils/pkg/sqlite"
+	"github.com/BossRighteous/MiSTer_Games_Data_Utils/pkg/utils"
 )
 
 func main() {
@@ -44,36 +45,9 @@ func main() {
 	buildMGDB(dataConfig)
 }
 
-func makeRDBMap(corePath string) map[string]int {
-	rdbMap := make(map[string]int)
-	rdbPath := filepath.Join(corePath, "libretro.rdb")
-	fmt.Printf("Opening %s\n", rdbPath)
-	rdbFile, err := os.Open(rdbPath)
-	rdbBytes := make([]byte, 0)
-	if err != nil {
-		fmt.Println("Unableto Open RDB")
-		return rdbMap
-	}
-	bytes, err := io.ReadAll(rdbFile)
-	if err != nil && err != io.EOF {
-		fmt.Println("Unable parse RDB")
-		return rdbMap
-	}
-	rdbBytes = append(rdbBytes, bytes...)
-	if len(rdbBytes) == 0 {
-		fmt.Println("RDB empty")
-		return rdbMap
-	}
-	games := rdb.Parse(rdbBytes)
-	for _, game := range games {
-		fmt.Println(game.ROMName, game.CRC32)
-		rdbMap[game.ROMName] = int(game.CRC32)
-	}
-	return rdbMap
-}
-
 func buildMGDB(dataConfig config.DataConfig) {
-	coresPath := "./cores/"
+	dirPath := config.CommandRootPath
+	coresPath := filepath.Join(dirPath, "cores")
 	coreDir := dataConfig.ScrapeFolder
 	corePath := filepath.Join(coresPath, coreDir)
 
@@ -109,8 +83,6 @@ func buildMGDB(dataConfig config.DataConfig) {
 
 	// Parse gamelist into usable structs
 	gamelist := gamelist.ParseGamelist(gamelistBytes)
-	// Allocate table maps by pk
-	// Consider reindexing game ID
 
 	reindexedGames := []mgdb.Game{
 		{
@@ -121,13 +93,13 @@ func buildMGDB(dataConfig config.DataConfig) {
 	}
 	gameMap := make(map[int]int)
 	gameMap[0] = 0
-	romMap := make(map[string]mgdb.GamelistRom)
-	romMap[""] = mgdb.GamelistRom{}
+	slugRomMap := make(map[string]mgdb.SlugRom)
+	slugRomMap[""] = mgdb.SlugRom{}
 	reindexedGenres := []mgdb.Genre{
 		{GenreID: 0, Name: "~Unknown"},
 	}
-	genreMap := make(map[int]int)
-	genreMap[0] = 0
+	genreMap := make(map[string]int) // genre [string]genreId/Index
+	genreMap[""] = 0
 
 	// Mapping for binary blobs
 	screenshotMap := make(map[int]string) // [gameId]imagePath
@@ -135,11 +107,8 @@ func buildMGDB(dataConfig config.DataConfig) {
 	titleScreenMap := make(map[int]string) //[gameId]imagePath
 	titleScreenMap[0] = ""
 	blobHashMap := make(map[string]bool) // [hash]exists
-	rdbMap := makeRDBMap(corePath)
 
 	reAscii := regexp.MustCompile("[[:^ascii:]]")
-
-	// Reinflate map of RDB filenames CRC32s since we have them
 
 	// Reorganize into table maps by game.ID
 	for _, game := range gamelist.Games {
@@ -151,17 +120,14 @@ func buildMGDB(dataConfig config.DataConfig) {
 			continue
 		}
 
-		glGenreID := 0
-		glGenreID, _ = strconv.Atoi(game.GenreID)
-
 		genreID := 0
-		if foundGenreID, ok := genreMap[glGenreID]; !ok {
+		if foundGenreID, ok := genreMap[game.Genre]; !ok {
 			genreID = len(reindexedGenres)
 			reindexedGenres = append(reindexedGenres, mgdb.Genre{
 				GenreID: genreID,
 				Name:    game.Genre,
 			})
-			genreMap[glGenreID] = genreID
+			genreMap[game.Genre] = genreID
 		} else {
 			genreID = foundGenreID
 		}
@@ -189,45 +155,25 @@ func buildMGDB(dataConfig config.DataConfig) {
 				ReleaseDate: fmtReleaseDate,
 				Developer:   game.Developer,
 				Publisher:   game.Publisher,
+				Players:     game.Players,
 			})
 			gameMap[glGameID] = gameID
 		} else {
 			gameID = foundGameID
 		}
 
-		// Polyfil
-		HasSuffix := func(s, suffix string) bool {
-			return len(s) >= len(suffix) && s[len(s)-len(suffix):] == suffix
-		}
-		CutSuffix := func(s, suffix string) (before string, found bool) {
-			if !HasSuffix(s, suffix) {
-				return s, false
-			}
-			return s[:len(s)-len(suffix)], true
-		}
+		//slugGameMap()
 
 		// configure romname as filename without extension
 		fileBase := filepath.Base(game.Path)
 		fileExt := filepath.Ext(game.Path)
-		filename, _ := CutSuffix(fileBase, fileExt)
-		if _, ok := romMap[filename]; !ok {
-			crc := 0
-			if rdbCrc, ok := rdbMap[fileBase]; ok {
-				crc = rdbCrc
-			}
+		filename, _ := utils.CutSuffix(fileBase, fileExt)
 
-			romMap[filename] = mgdb.GamelistRom{
-				FileName:           filename,
-				GameID:             gameID,
-				SupportedSystemIds: "",
-				CRC32:              crc,
-			}
-		}
-		// Add slug for fuzzy match
-		slug := mgdb.SlugifyString(filename)
-		if _, ok := romMap[slug]; !ok {
-			romMap[slug] = mgdb.GamelistRom{
-				FileName:           slug,
+		// Slug is primary filename matcher to game
+		slug := utils.SlugifyString(filename)
+		if _, ok := slugRomMap[slug]; !ok {
+			slugRomMap[slug] = mgdb.SlugRom{
+				Slug:               slug,
 				GameID:             gameID,
 				SupportedSystemIds: "",
 			}
@@ -244,6 +190,19 @@ func buildMGDB(dataConfig config.DataConfig) {
 		}
 	}
 
+	rdbRoms, rdbErr := rdb.LoadNDJSON(corePath)
+	romCrs := []mgdb.RomCrc{}
+	if rdbErr == nil {
+		for _, rom := range rdbRoms {
+			slug := utils.SlugifyString(rom.RomName)
+			if slugRom, ok := slugRomMap[slug]; ok {
+				romCrs = append(romCrs, mgdb.RomCrc{CRC32: rom.CRC, Slug: slugRom.Slug})
+			}
+		}
+	} else {
+		fmt.Println("error loading ndjson, skipping CRCs")
+	}
+
 	dbPath := filepath.Join(corePath, mgdbFilename+".mgdb")
 	db, err := sqlite.CreateMGDB(dbPath)
 	if err != nil {
@@ -254,9 +213,11 @@ func buildMGDB(dataConfig config.DataConfig) {
 	sqlite.InsertMGDBInfo(db, dbInfo)
 	sqlite.BulkInsertGames(db, reindexedGames)
 	sqlite.BulkInsertGenres(db, reindexedGenres)
-	sqlite.BulkInsertGamelistRoms(db, romMap)
+	sqlite.BulkInsertSlugRoms(db, slugRomMap)
+	sqlite.BulkInsertRomCrcs(db, romCrs)
 	sqlite.BulkInsertImageMap(db, "Screenshot", screenshotMap, blobHashMap, corePath)
 	sqlite.BulkInsertImageMap(db, "TitleScreen", titleScreenMap, blobHashMap, corePath)
 	fmt.Println("MGDB Built Successfully")
+	sqlite.Vacuum(db)
 	db.Close()
 }

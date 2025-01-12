@@ -1,0 +1,36 @@
+use libretrodb_tool to generate rdb.ndjson files
+
+Read in ndjson as new struct type
+
+slugify and map to unique slugs, prefering singe shortest rom name for scraping
+
+after scraping read in XML and images, the XML game name can be re-slugified
+map slug:gameID
+create slug gamelistroms with game ID First
+
+reload and loop ndjson adding gamelistroms based on slug:gameID map
+
+each scraped game will have a unique slug in this case
+
+TODO: SLUG should prioritize deduping over being perfect match, loosen up clauses
+really just trim ()[] and reduce to lowercase
+
+Game
+    slug
+        ROM (CRC)
+        ROM
+        ROM
+        ROM
+    slug
+        ROM
+    slug
+        ROM
+        ROM
+
+
+In this sense ALL roms that can map to a game must do so through a slug
+This really simplifies the lookups
+ROM names don't even need to be stored in the DB, and can instead be indexed by CRC
+
+CRCMap
+crc32:GameID

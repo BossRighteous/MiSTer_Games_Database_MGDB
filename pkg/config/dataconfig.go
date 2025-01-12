@@ -8,6 +8,8 @@ type DataConfig struct {
 	Systems      []mister.System
 }
 
+var CommandRootPath string = "/mnt/c/Users/bossr/Code/MiSTer_Games_Data_Utils"
+
 var DataConfigs map[string]DataConfig = map[string]DataConfig{
 	"ATARI5200":       {ScrapeFolder: "ATARI5200", RdbName: "Atari - 5200.rdb", Systems: []mister.System{mister.Systems["Atari5200"]}},
 	"ATARI7800":       {ScrapeFolder: "ATARI7800", RdbName: "Atari - 7800.rdb", Systems: mister.CoreGroups["Atari7800"]},

@@ -57,15 +57,25 @@ func allocDB(path string) (*sql.DB, error) {
 		return db, err
 	}
 
-	// FileName without ext should be good match
-	// Slugs can go here too!
+	// Slugs were derived from full deduped list
 	sqlStmt = `
-	drop table if exists GamelistRom;
-	create table GamelistRom (
-		FileName text primary key not null,
+	drop table if exists SlugRom;
+	create table SlugRom (
+		Slug text primary key not null,
 		GameID integer not null,
-		SupportedSystemIds text not null,
-		CRC32 integer not null
+		SupportedSystemIds text not null
+	);`
+	_, err = db.Exec(sqlStmt)
+	if err != nil {
+		return db, err
+	}
+
+	// CRC32 hex strings for possible slug mapping later
+	sqlStmt = `
+	drop table if exists RomCrc;
+	create table RomCrc (
+		CRC32 text primary key not null,
+		Slug text not null
 	);`
 	_, err = db.Exec(sqlStmt)
 	if err != nil {
@@ -126,6 +136,15 @@ func CreateMGDB(path string) (*sql.DB, error) {
 	}
 	//db.Exec("VACUUM")
 	return db, nil
+}
+
+func Vacuum(db *sql.DB) {
+	sqlStmt := `VACUUM;`
+	_, err := db.Exec(sqlStmt)
+	if err != nil {
+		fmt.Println("Vacuum Failed")
+	}
+	fmt.Println("Vacuum Executed")
 }
 
 func InsertMGDBInfo(db *sql.DB, info mgdb.MGDBInfo) {
@@ -206,27 +225,49 @@ func BulkInsertGenres(db *sql.DB, genres []mgdb.Genre) {
 	}
 }
 
-func BulkInsertGamelistRoms(db *sql.DB, gamelistRoms map[string]mgdb.GamelistRom) {
-	for _, rom := range gamelistRoms {
-		fmt.Println("adding rom", rom.FileName)
+func BulkInsertSlugRoms(db *sql.DB, slugRomMap map[string]mgdb.SlugRom) {
+	for _, rom := range slugRomMap {
+		fmt.Println("adding SlugRom", rom.Slug)
 		stmt, err := db.Prepare(
-			"insert into GamelistRom(" +
-				"FileName, GameID, SupportedSystemIds, CRC32" +
-				") values (?, ?, ?, ?)",
+			"insert into SlugRom(" +
+				"Slug, GameID, SupportedSystemIds" +
+				") values (?, ?, ?)",
 		)
 		if err != nil {
 			fmt.Printf("%+v\n", rom)
-			panic("BulkInsertGamelistRoms Prepare")
+			panic("BulkInsertSlugRoms Prepare")
 		}
 		_, err = stmt.Exec(
-			rom.FileName,
+			rom.Slug,
 			rom.GameID,
 			rom.SupportedSystemIds,
-			rom.CRC32,
 		)
 		if err != nil {
 			fmt.Printf("%+v\n", rom)
-			panic("BulkInsertGamelistRoms Exec")
+			panic("BulkInsertSlugRoms Exec")
+		}
+	}
+}
+
+func BulkInsertRomCrcs(db *sql.DB, romCrcs []mgdb.RomCrc) {
+	for _, rom := range romCrcs {
+		fmt.Println("adding RomCrc", rom.CRC32, rom.Slug)
+		stmt, err := db.Prepare(
+			"insert into RomCrc(" +
+				"CRC32, Slug" +
+				") values (?, ?)",
+		)
+		if err != nil {
+			fmt.Printf("%+v\n", rom)
+			panic("BulkInsertRomCrcs Prepare")
+		}
+		_, err = stmt.Exec(
+			rom.CRC32,
+			rom.Slug,
+		)
+		if err != nil {
+			fmt.Printf("%+v\n", rom)
+			panic("BulkInsertRomCrcs Exec")
 		}
 	}
 }
@@ -251,7 +292,7 @@ func BulkInsertImageMap(db *sql.DB, imgType string, imageMap map[int]string, md5
 		if gameID == 0 || filePath == "" {
 			continue
 		}
-		fmt.Printf("adding image %v %v", imgType, filePath)
+		fmt.Printf("adding image %v %v\n", imgType, filePath)
 		imgPath := filepath.Join(basePath, filePath)
 		blob := safeLoadFileBytes(imgPath)
 		if blob == nil {
@@ -292,7 +333,7 @@ func BulkInsertImageMap(db *sql.DB, imgType string, imageMap map[int]string, md5
 			"update Game set " + column + " = ? where GameID = ?",
 		)
 		if err != nil {
-			fmt.Printf("%v %v", gameID, hash)
+			fmt.Printf("%v %v\n", gameID, hash)
 			panic("BulkInsertImageMap Game Update Prepare")
 		}
 		_, err = stmt.Exec(
@@ -300,7 +341,7 @@ func BulkInsertImageMap(db *sql.DB, imgType string, imageMap map[int]string, md5
 			gameID,
 		)
 		if err != nil {
-			fmt.Printf("%v %v", gameID, hash)
+			fmt.Printf("%v %v\n", gameID, hash)
 			panic("BulkInsertScreenshots Game Update Exec")
 		}
 	}
