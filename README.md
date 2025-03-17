@@ -22,7 +22,7 @@ The working theory is:
 
 As the project is in beta, MGDB binaries and schemas are subject to change. Please avoid downloading the full collections not if later replacement is a concern from a write/storage perspective.
 
-## License and attributing
+## License and attributions
 The code of the repository is MIT license.
 - RDB data and utils courtesy of [Libretro](https://github.com/libretro/libretro-database) contributors
 - MiSTer MGL/MRA system mappings courtesy of [Wizzomafizzo](https://github.com/wizzomafizzo/mrext/blob/main/pkg/games/systems.go)

@@ -342,7 +342,7 @@ func BulkInsertRomCrcs(db *sql.DB, romCrcs []mgdb.RomCrc) {
 		)
 		if err != nil {
 			fmt.Printf("%+v\n", rom)
-			panic("BulkInsertRomCrcs Exec")
+			fmt.Println("Error BulkInsertRomCrcs Exec: Possible Dupe CRC, skipping")
 		}
 	}
 }
