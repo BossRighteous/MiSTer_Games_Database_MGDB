@@ -1,7 +1,12 @@
 cores
+_cores
+cores_1g1r
+cores_arcade
+cores_arcade_1g1r
 touches
 tgdb
 cmd/scratch
 dev-notes.txt
 mgdbs
 mgdbs.7z
+nointrodb/
