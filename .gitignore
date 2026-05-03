@@ -3,6 +3,7 @@ _cores
 cores_1g1r
 cores_arcade
 cores_arcade_1g1r
+launchers
 touches
 tgdb
 cmd/scratch
@@ -10,3 +11,7 @@ dev-notes.txt
 mgdbs
 mgdbs.7z
 nointrodb/
+media.db
+media.db-shm
+media.db-wal
+.claude/
