@@ -1,3 +1,6 @@
+# Archiving
+Go use Zaparoo Front End and https://github.com/BossRighteous/MiSTer-Media-DB instead :)
+
 # MiSTer_Games_Data_Utils
 MGDB media database Generation Utilities for [MiSTer_Games_GUI](https://github.com/BossRighteous/MiSTer_Games_GUI) to allow GUI media browsing of your [MiSTer FPGA](https://github.com/MiSTer-devel/Wiki_MiSTer/wiki) library
 
